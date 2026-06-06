@@ -128,7 +128,7 @@
     const caughtLogs = [
       "🚨 班主任突然折返推门，冷冷地看着你慌乱的手部动作：'心思不用在正道上，盯着别的地方看什么呢？'",
       "🚨 班主任突然推门而入，当场抓获了你的切屏走神行为！'你在看什么这么入迷？'",
-      "🚨 后门被班主任一把拉开，她目光直勾勾地盯着你：'全神贯注，别搞小动作！'"
+      "🚨 后门被班主任一把拉开，她目光直勾孤地盯着你：'全神贯注，别搞小动作！'"
     ];
 
     // 👩‍🏫 拟人化二次元粉笔画手绘班主任 SVG 👩‍🏫
@@ -185,6 +185,7 @@
       const [focusSeconds, setFocusSeconds] = useState(1500);
       const [dailyLog, setDailyLog] = useState("班级风纪板更新：环境已打扫干净，请大家迅速坐好，潜心专注。");
       const [isConfiguring, setIsConfiguring] = useState(false);
+      const [isSimulatedFull, setIsSimulatedFull] = useState(false); // 用于无法调用原生全屏的手机端的模拟全屏状态
 
       const [tempClassroom, setTempClassroom] = useState("");
       const [tempSubject, setTempSubject] = useState("");
@@ -295,7 +296,7 @@
           osc.frequency.setValueAtTime(65, audioCtx.current.currentTime);
           osc.frequency.exponentialRampToValueAtTime(35, audioCtx.current.currentTime + 0.25);
           g.gain.setValueAtTime(volume, audioCtx.current.currentTime);
-          g.gain.linearRampToValueAtTime(0, audioCtx.current.currentTime + 0.26);
+          g.gain.linearRampToValueAtTime(0, opacity => opacity, audioCtx.current.currentTime + 0.26);
           osc.connect(g); g.connect(audioCtx.current.destination);
           osc.start(); osc.stop(audioCtx.current.currentTime + 0.28);
         } catch(e) {}
@@ -309,16 +310,28 @@
       const enterFullscreen = () => {
         const el = document.documentElement;
         try {
-          if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
-          else if (el.webkitRequestFullScreen) el.webkitRequestFullScreen();
-          else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
-          else if (el.msRequestFullscreen) el.msRequestFullscreen();
+          if (el.requestFullscreen) {
+            el.requestFullscreen().catch(() => {
+              setIsSimulatedFull(true);
+            });
+          } else if (el.webkitRequestFullScreen) {
+            el.webkitRequestFullScreen();
+          } else if (el.mozRequestFullScreen) {
+            el.mozRequestFullScreen();
+          } else if (el.msRequestFullscreen) {
+            el.msRequestFullscreen();
+          } else {
+            // 原生不支持全屏的移动设备（如 iOS Safari）直接进入模拟全屏状态
+            setIsSimulatedFull(true);
+          }
         } catch (e) {
-          console.warn("请求全屏受阻:", e);
+          console.warn("请求全屏受阻，使用模拟全屏替代:", e);
+          setIsSimulatedFull(true);
         }
       };
 
       const exitFullscreen = () => {
+        setIsSimulatedFull(false);
         try {
           if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement) {
             if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
@@ -338,20 +351,71 @@
             const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
             const isHidden = document.hidden;
 
-            if ((hasFullscreenSupport && !isFull) || isHidden) {
-              triggerCaught();
+            if (isSimulatedFull) {
+              // 模拟全屏下，重点检测切屏或离开窗口（即 document.hidden）
+              if (isHidden) {
+                triggerCaught();
+              }
+            } else if (hasFullscreenSupport) {
+              if (!isFull || isHidden) {
+                triggerCaught();
+              }
+            } else {
+              // 移动端无原生全屏支持时，只监控切屏隐藏
+              if (isHidden) {
+                triggerCaught();
+              }
             }
           }
         };
-        document.addEventListener("fullscreenchange", radarScan);
-        document.addEventListener("webkitfullscreenchange", radarScan);
+
+        const handleFsChange = () => {
+          const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+          if (!isFull && !isSimulatedFull) {
+            // 如果用户主动退出了原生全屏，且并非运行于模拟全屏下，则判定为退出或视窗变化
+            radarScan();
+          }
+        };
+
+        document.addEventListener("fullscreenchange", handleFsChange);
+        document.addEventListener("webkitfullscreenchange", handleFsChange);
         document.addEventListener("visibilitychange", radarScan);
         return () => {
-          document.removeEventListener("fullscreenchange", radarScan);
-          document.removeEventListener("webkitfullscreenchange", radarScan);
+          document.removeEventListener("fullscreenchange", handleFsChange);
+          document.removeEventListener("webkitfullscreenchange", handleFsChange);
           document.removeEventListener("visibilitychange", radarScan);
         };
-      }, [subjectName]);
+      }, [subjectName, isSimulatedFull]);
+
+      // 纪律委员通风报信逻辑（触发突击）
+      const triggerDisciplineCall = () => {
+        if (stateRef.current !== "FOCUSING") {
+          setDailyLog("📢 【纪律委员提示】：目前不在自习状态中，无法喊班主任过来。");
+          return;
+        }
+        if (cooldownRef.current > 0) {
+          setDailyLog("📢 【纪律委员提示】：班主任才刚走没多久呢，现在很安全，不需要通风报信。");
+          return;
+        }
+        setDailyLog("📢 【纪律委员突然低声喊道】：‘快快快！大家坐好！班主任好像朝教室后门走过来了！’");
+        playTone(750, 0.2, "triangle");
+        startRaidWarningSequence();
+      };
+
+      // 监听空格键
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+            return; // 过滤输入框，避免打字干扰
+          }
+          if (e.key === " " || e.code === "Space") {
+            e.preventDefault(); // 阻止页面默认滚动
+            triggerDisciplineCall();
+          }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+      }, []);
 
       const getDaysToExam = () => {
         if (!examDate) return 0;
@@ -422,7 +486,7 @@
         return () => clearInterval(timer);
       }, [gameState, subjectName]);
 
-      // 脚步声与迫近进度条同步递进（戏剧感增强）
+      // 脚步声与迫近进度条同步递进
       const startRaidWarningSequence = () => {
         setGameState("WARNING");
         
@@ -504,7 +568,7 @@
           const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
           const hasFullscreenSupport = checkFullscreenSupport();
           
-          if ((hasFullscreenSupport && !isFull) || document.hidden) {
+          if (!isSimulatedFull && ((hasFullscreenSupport && !isFull) || document.hidden)) {
             clearInterval(raidIntervalRef.current);
             triggerCaught();
             return;
@@ -538,7 +602,7 @@
                 const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
                 const hasFullscreenSupport = checkFullscreenSupport();
                 
-                if ((hasFullscreenSupport && !isFull) || document.hidden) {
+                if (!isSimulatedFull && ((hasFullscreenSupport && !isFull) || document.hidden)) {
                   triggerCaught();
                 } else {
                   setGameState("FOCUSING");
@@ -555,7 +619,7 @@
           }, 1000);
         }
         return () => clearInterval(timer);
-      }, [gameState, leaveSeconds]);
+      }, [gameState, leaveSeconds, isSimulatedFull]);
 
       const triggerCaught = () => {
         clearInterval(warningIntervalRef.current);
@@ -629,7 +693,6 @@
         setDailyLog("个性化自习看板及目标倒计时已成功应用。");
       };
 
-      // 解除全屏剧烈抖动的平稳重置方法
       const handleResolveCaught = () => {
         initAudioOnUserGesture();
         setGameState("IDLE");
@@ -643,10 +706,13 @@
       const cardClass = isNight ? "glass-card" : "light-glass-card";
       const borderClass = isNight ? "border-white/20 text-emerald-100" : "border-stone-300 text-stone-800";
 
+      // 如果开启模拟全屏，叠加全屏布局类名
+      const simulatedFullClass = isSimulatedFull ? "fixed inset-0 z-[9999] overflow-y-auto w-full h-full" : "";
+
       return (
         <div className={`min-h-screen w-full ${mainBg} flex flex-col p-4 md:p-6 space-y-4 md:space-y-6 transition-all ${
           gameState === 'CAUGHT' ? 'caught-explosion' : ''
-        }`}>
+        } ${simulatedFullClass}`}>
           
           {/* Header 区域 */}
           <header className={`flex flex-col sm:flex-row justify-between items-center p-4 rounded-xl ${cardClass} shadow-md border gap-4`}>
@@ -727,7 +793,7 @@
               </div>
 
               <div className="pt-4 border-t border-current/10 mt-4 lg:mt-0 text-[11px] opacity-50 leading-relaxed">
-                * 自律约束：潜心备考，杜绝无意义切屏。本系统严格绑定全屏/视窗状态，退出将被扣除自律积分。
+                * 自律约束：潜心备考，杜绝无意义切屏。移动设备若不支持原生全屏，系统将自动采用网页全屏监控。
               </div>
             </aside>
 
@@ -756,65 +822,112 @@
                 )}
               </div>
 
-              {/* 🚪 教室后门组件 (全新无缝融合包边设计，彻底杜绝白边) 🚪 */}
-              <div className="relative w-48 h-80 perspective-[1200px] my-3 rounded-2xl bg-[#090503] shadow-inner p-1">
-                {/* 深红木质内侧门框 */}
-                <div className="absolute inset-0 border-[6px] border-[#2c1309] rounded-xl bg-[#0a0503] overflow-hidden">
-                   
-                   {/* 👩‍🏫 拟人化二次元班主任女老师现身层 👩‍🏫 */}
-                   {(gameState === "RAID_ACTIVE" || gameState === "CAUGHT") && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-between p-2 pt-4 bg-[#142C1E]/95 animate-fade-in-scale">
-                      <div className="w-full h-44">
-                        <TeacherPortrait />
+              {/* 🚪 教室后门组件 (包含门内和定位正中提示) 🚪 */}
+              <div className="relative">
+                <div className="w-48 h-80 perspective-[1200px] my-3 rounded-2xl bg-[#090503] shadow-inner p-1">
+                  {/* 深红木质内侧门框 */}
+                  <div className="absolute inset-0 border-[6px] border-[#2c1309] rounded-xl bg-[#0a0503] overflow-hidden">
+                     
+                     {/* 👩‍🏫 拟人化二次元班主任女老师现身层 👩‍🏫 */}
+                     {(gameState === "RAID_ACTIVE" || gameState === "CAUGHT") && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-between p-2 pt-4 bg-[#142C1E]/95 animate-fade-in-scale">
+                        <div className="w-full h-44">
+                          <TeacherPortrait />
+                        </div>
+                        <div className="mb-2 bg-white text-stone-900 text-[10px] font-bold px-2 py-0.5 rounded border border-red-500 shadow">
+                          {gameState === "CAUGHT" ? "考纪黄牌通报！" : "视察中..."}
+                        </div>
                       </div>
-                      <div className="mb-2 bg-white text-stone-900 text-[10px] font-bold px-2 py-0.5 rounded border border-red-500 shadow">
-                        {gameState === "CAUGHT" ? "考纪黄牌通报！" : "视察中..."}
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* 拟物木质门页 */}
-                  <div 
-                    className="absolute inset-0 wood-door-bg border-r-[6px] border-black/50 transition-transform duration-500 origin-left z-20 flex flex-col justify-between p-4"
-                    style={{ transform: (gameState==='RAID_ACTIVE'||gameState==='CAUGHT') ? 'rotateY(-110deg)' : 'rotateY(0deg)' }}
-                  >
-                    {/* 窥视玻璃小窗 */}
-                    <div className="w-full h-24 border border-white/20 bg-white/5 rounded shadow-inner relative overflow-hidden">
-                      <div className="absolute inset-0 glass-mesh opacity-20"></div>
-                      <div className="w-full h-0.5 bg-white/10 mt-12"></div>
+                    {/* 拟物木质门页 */}
+                    <div 
+                      className="absolute inset-0 wood-door-bg border-r-[6px] border-black/50 transition-transform duration-500 origin-left z-20 flex flex-col justify-between p-4"
+                      style={{ transform: (gameState==='RAID_ACTIVE'||gameState==='CAUGHT') ? 'rotateY(-110deg)' : 'rotateY(0deg)' }}
+                    >
+                      {/* 窥视玻璃小窗 */}
+                      <div className="w-full h-24 border border-white/20 bg-white/5 rounded shadow-inner relative overflow-hidden">
+                        <div className="absolute inset-0 glass-mesh opacity-20"></div>
+                        <div className="w-full h-0.5 bg-white/10 mt-12"></div>
+                      </div>
+                      {/* 圆形把手 */}
+                      <div className="w-4 h-4 bg-gradient-to-br from-yellow-300 to-amber-600 rounded-full ml-auto mr-1 shadow-md border border-black/40 my-auto"></div>
+                      <div className="w-full h-1"></div>
                     </div>
-                    {/* 圆形把手 */}
-                    <div className="w-4 h-4 bg-gradient-to-br from-yellow-300 to-amber-600 rounded-full ml-auto mr-1 shadow-md border border-black/40 my-auto"></div>
-                    <div className="w-full h-1"></div>
                   </div>
                 </div>
+
+                {/* 门页正中间的提示画面 - 警告状态（脚步渐近进度条） */}
+                {gameState === 'WARNING' && (
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-amber-950/95 border-2 border-amber-500 p-4 rounded-xl text-center backdrop-blur-sm shadow-2xl w-44 pointer-events-none animate-fade-in-scale">
+                    <p className="text-[10px] font-chalk text-amber-400 mb-1.5 leading-relaxed">
+                      {warningType === 'sudden' ? '🚨 糟糕！走廊传来急促的皮鞋声！' : 
+                       warningType === 'passby' ? '👣 走廊隐约传来迟缓的脚步声...' : 
+                       '👟 听！皮鞋声正缓缓逼近...'}
+                    </p>
+                    <div className="mt-2 mb-2 flex justify-center gap-1">
+                      {[1, 2, 3, 4, 5].map(step => (
+                        <span 
+                          key={step} 
+                          className={`h-2.5 rounded transition-all duration-300 ${
+                            footstepStep >= step ? 'w-6 bg-red-600 animate-pulse' : 'w-2 bg-stone-800'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-[9px] text-stone-400 mt-1 font-sans">
+                      {warningType === 'sudden' ? '突发突袭！迅速摆正姿势！' : 
+                       warningType === 'passby' ? '可能只是隔壁班路过...' : 
+                       '注意：班主任随时可能推门！'}
+                    </p>
+                  </div>
+                )}
+
+                {/* 门页正中间的提示画面 - 突击抽查倒计时 */}
+                {gameState === 'RAID_ACTIVE' && (
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-emerald-950/95 border-2 border-emerald-400 p-4 rounded-xl text-center backdrop-blur-sm shadow-2xl w-44 pointer-events-none">
+                    <p className="text-[10px] font-chalk text-emerald-400 mb-1 leading-snug">⚠️ 班主任正从后门窗外扫视教室</p>
+                    <p className="font-mono-digital text-3xl text-emerald-300 font-bold">{raidTimer.toFixed(2)}s</p>
+                    <p className="text-[9px] text-stone-400 mt-1 font-sans">严禁切屏！保持坐姿专注！</p>
+                  </div>
+                )}
               </div>
 
               {/* 按钮群组 */}
-              <div className="w-full max-w-xs px-2">
+              <div className="w-full max-w-xs px-2 space-y-2">
                 {gameState === "IDLE" && (
                   <button onClick={startSession} className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-600 font-chalk text-white rounded-lg text-sm tracking-widest shadow-lg transform hover:scale-102 transition min-h-[44px]">
                     开始进入全屏自习
                   </button>
                 )}
                 {gameState === "FOCUSING" && (
-                  <div className="grid grid-cols-2 gap-2 w-full font-chalk">
+                  <div className="flex flex-col gap-2 w-full font-chalk">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => handleOpenWhiteList(whiteList[0]?.url)} 
+                        className={`py-3 rounded-lg border border-current text-xs min-h-[44px] hover:scale-102 transition ${isNight?'bg-white/5':'bg-stone-200'}`}
+                      >
+                        查阅资料
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (confirm("提前退场将无法积累本次复习时长，确定退出专注吗？")) {
+                            setGameState("IDLE");
+                            exitFullscreen();
+                          }
+                        }} 
+                        className="py-3 rounded-lg bg-red-900/10 border border-red-500/30 text-red-500 text-xs min-h-[44px] hover:scale-102 transition"
+                      >
+                        放弃自习
+                      </button>
+                    </div>
+
+                    {/* 纪律委员通风报信触发按钮 (兼容手机点击 & PC空格键) */}
                     <button 
-                      onClick={() => handleOpenWhiteList(whiteList[0]?.url)} 
-                      className={`py-3 rounded-lg border border-current text-xs min-h-[44px] hover:scale-102 transition ${isNight?'bg-white/5':'bg-stone-200'}`}
+                      onClick={triggerDisciplineCall}
+                      className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs tracking-wider transition min-h-[40px] shadow-md flex items-center justify-center gap-1.5"
                     >
-                      查阅资料
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (confirm("提前退场将无法积累本次复习时长，确定退出专注吗？")) {
-                          setGameState("IDLE");
-                          exitFullscreen();
-                        }
-                      }} 
-                      className="py-3 rounded-lg bg-red-900/10 border border-red-500/30 text-red-500 text-xs min-h-[44px] hover:scale-102 transition"
-                    >
-                      放弃自习
+                      📢 纪律委员通风报信 (按空格键)
                     </button>
                   </div>
                 )}
@@ -951,41 +1064,6 @@
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* 警告状态：脚步渐近进度条遮罩 */}
-          {gameState === 'WARNING' && (
-            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-amber-950/95 border-2 border-amber-500 p-4 rounded-xl text-center backdrop-blur-sm shadow-2xl max-w-[280px] w-full pointer-events-none animate-fade-in-scale">
-              <p className="text-[11px] font-chalk text-amber-400 mb-1.5 leading-relaxed">
-                {warningType === 'sudden' ? '🚨 糟糕！走廊传来急促的皮鞋敲击声，直奔后门！' : 
-                 warningType === 'passby' ? '👣 走廊隐约传来阵阵迟缓的脚步声...' : 
-                 '👟 听！走廊外传来皮鞋与地面的摩擦声，正缓缓逼近...'}
-              </p>
-              <div className="mt-2 mb-2 flex justify-center gap-1.5">
-                {[1, 2, 3, 4, 5].map(step => (
-                  <span 
-                    key={step} 
-                    className={`h-3 rounded transition-all duration-300 ${
-                      footstepStep >= step ? 'w-10 bg-red-600 animate-pulse' : 'w-4 bg-stone-800'
-                    }`}
-                  />
-                ))}
-              </div>
-              <p className="text-[10px] text-stone-400 mt-1 font-sans">
-                {warningType === 'sudden' ? '突发突袭！迅速摆正姿势！' : 
-                 warningType === 'passby' ? '保持淡定，可能是隔壁班路过...' : 
-                 '注意：班主任随时可能推门！'}
-              </p>
-            </div>
-          )}
-
-          {/* 突击抽查状态遮罩 */}
-          {gameState === 'RAID_ACTIVE' && (
-            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-emerald-950/95 border-2 border-emerald-400 p-4 rounded-xl text-center backdrop-blur-sm shadow-2xl max-w-[260px] w-full pointer-events-none">
-              <p className="text-[11px] font-chalk text-emerald-400 mb-1">⚠️ 班主任正在后门窗外进行凝视巡视</p>
-              <p className="font-mono-digital text-3xl text-emerald-300 font-bold">{raidTimer.toFixed(2)}s</p>
-              <p className="text-[10px] text-stone-400 mt-1 font-sans">严禁切屏！目光收回，保持专注！</p>
             </div>
           )}
         </div>
