@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>专注自习室 @yuka</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Share+Tech+Mono&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans SC', sans-serif;
+      transition: background-color 0.4s ease;
+    }
+    .font-chalk {
+      font-family: 'ZCOOL KuaiLe', 'SimHei', sans-serif;
+    }
+    .font-mono-digital {
+      font-family: 'Share Tech Mono', monospace;
+    }
+    
+    /* 🍏 升级版明亮黑板：明快草绿与粉笔擦颗粒感 🍏 */
+    .blackboard-bg {
+      background-color: #163824;
+      background-image: 
+        radial-gradient(circle at 50% 30%, #205235 0%, #122F1E 80%),
+        radial-gradient(rgba(255,255,255,0.04) 1px, transparent 0),
+        radial-gradient(rgba(255,255,255,0.03) 2px, transparent 0);
+      background-size: 100% 100%, 40px 40px, 80px 80px;
+      color: #F0FDF4;
+    }
+
+    /* ☀️ 阳光书桌纸张 ☀️ */
+    .paper-texture {
+      background-color: #FBF6EA;
+      background-image: 
+        radial-gradient(rgba(0,0,0,0.02) 1px, transparent 0),
+        linear-gradient(to right, rgba(139,92,26,0.02) 1px, transparent 1px);
+      background-size: 12px 12px, 30px 100%;
+      color: #2F1E0A;
+    }
+
+    /* 模拟旧木门的纹理 */
+    .wood-door-bg {
+      background: linear-gradient(to right, #6E381C 0%, #542813 20%, #632F16 40%, #4D220F 60%, #6E381C 80%, #441E0D 100%);
+      box-shadow: inset 0 0 25px rgba(0,0,0,0.6);
+    }
+
+    .glass-card {
+      backdrop-filter: blur(10px);
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .light-glass-card {
+      backdrop-filter: blur(6px);
+      border: 1px dashed rgba(139, 92, 26, 0.2);
+      background: rgba(255, 255, 255, 0.6);
+    }
+
+    /* 消除滚动条 */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+    @keyframes sound-wave {
+      0%, 100% { transform: scaleY(1); }
+      50% { transform: scaleY(3.5); }
+    }
+    .animate-sound-wave {
+      animation: sound-wave 1s ease-in-out infinite;
+      transform-origin: bottom;
+    }
+
+    @keyframes fadeInScale {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .animate-fade-in-scale { animation: fadeInScale 0.2s ease-out forwards; }
+
+    /* 被抓到时的全屏强烈震动效果 */
+    @keyframes screen-explosion {
+      0% { transform: translate(0, 0) rotate(0deg); }
+      10% { transform: translate(-8px, -6px) rotate(-1.5deg); }
+      20% { transform: translate(10px, 8px) rotate(2deg); }
+      30% { transform: translate(-12px, 3px) rotate(-0.5deg); }
+      40% { transform: translate(8px, -10px) rotate(1.5deg); }
+      50% { transform: translate(-6px, 10px) rotate(-2deg); }
+      60% { transform: translate(12px, -3px) rotate(0.5deg); }
+      70% { transform: translate(-10px, -8px) rotate(-1.5deg); }
+      80% { transform: translate(5px, 12px) rotate(2deg); }
+      100% { transform: translate(0, 0) rotate(0deg); }
+    }
+    .caught-explosion { animation: screen-explosion 0.12s infinite; }
+  </style>
+</head>
+<body class="overflow-x-hidden select-none">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const Icons = {
+      Shield: ({ className }) => <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
+      Book: ({ className }) => <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20M4 19.5V3a1 1 0 0 1 1-1h15v15H6.5" /></svg>,
+      User: ({ className }) => <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
+      ExternalLink: ({ className }) => <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>,
+      Trash: ({ className }) => <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>,
+      Plus: ({ className }) => <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+    };
+
+    // 拟自然情境下的班风风纪预设语句
+    const passbyLogs = [
+      "🚪 走廊传来缓缓的脚步声，在后门窗户前停顿了片刻，最终又往走廊深处去了。虚惊一场！",
+      "👣 隔壁班似乎传来一阵挪课桌的骚动，班主任快步路过，并未往内张望。",
+      "🚪 门外走廊传来熟悉而平缓的脚步声，只是普通的例行巡查，很快便渐渐远去。"
+    ];
+    
+    const successLogs = [
+      "👀 后门窗外闪过一个熟悉的身影，老师在玻璃后停留扫视数秒，看到你正全神贯注，便悄然离开。",
+      "📋 班主任似乎注意到你心无旁骛、状态极佳，欣慰地暗自点头，轻轻放开了门把手。",
+      "🚪 班主任在后门静静注视着你，看你连头都没抬一下。她露出一丝赞许的微笑，轻步走开了。",
+      "🔍 班主任轻轻推开一丝门缝扫视全班，发现你坐姿端正、全心在学，随即合拢了木门。"
+    ];
+
+    const caughtLogs = [
+      "🚨 班主任突然折返推门，冷冷地看着你慌乱的手部动作：'心思不用在正道上，盯着别的地方看什么呢？'",
+      "🚨 班主任突然推门而入，当场抓获了你的切屏走神行为！'你在看什么这么入迷？'",
+      "🚨 后门被班主任一把拉开，她目光直勾勾地盯着你：'全神贯注，别搞小动作！'"
+    ];
+
+    // 👩‍🏫 拟人化二次元粉笔画手绘班主任 SVG 👩‍🏫
+    function TeacherPortrait() {
+      return (
+        <svg viewBox="0 0 200 250" className="w-full h-full drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
+          <path d="M130,45 C155,30 170,60 155,85 C145,75 135,65 130,45 Z" fill="#ffffff" stroke="#999" strokeWidth="1.5" opacity="0.8" />
+          <circle cx="100" cy="70" r="35" fill="none" stroke="#ffffff" strokeWidth="2.5" />
+          <path d="M72,55 C85,45 115,45 128,55 C120,60 100,55 72,55 Z" fill="#ffffff" />
+          <path d="M68,65 C75,55 85,75 88,80" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <path d="M132,65 C125,55 115,75 112,80" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <rect x="75" y="65" width="20" height="14" rx="3" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <rect x="105" y="65" width="20" height="14" rx="3" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <line x1="95" y1="72" x2="105" y2="72" stroke="#ffffff" strokeWidth="2" />
+          <circle cx="85" cy="72" r="3" fill="#ffffff" />
+          <circle cx="115" cy="72" r="3" fill="#ffffff" />
+          <path d="M78,61 Q85,58 92,62" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <path d="M108,61 Q115,58 122,62" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <path d="M93,92 Q100,88 107,92" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <path d="M100,105 L85,125 L65,120 L80,105 Z" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <path d="M100,105 L115,125 L135,120 L120,105 Z" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <path d="M65,120 C45,150 40,250 40,250 L160,250 C160,250 155,150 135,120 Z" fill="none" stroke="#ffffff" strokeWidth="2.5" />
+          <path d="M145,160 Q170,120 165,100" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <rect x="162" y="92" width="5" height="12" rx="1" fill="#FFEDD5" stroke="#ffffff" strokeWidth="1" transform="rotate(15 162 92)" />
+        </svg>
+      );
+    }
+
+    function App() {
+      // 1. 本地 localStorage 读取
+      const [theme, setTheme] = useState(() => {
+        try { return localStorage.getItem("theme") || "night"; } catch(e) { return "night"; }
+      });
+      const [reconPoints, setReconPoints] = useState(() => {
+        try { return Number(localStorage.getItem("reconPoints")) || 0; } catch(e) { return 0; }
+      });
+      const [classroomName, setClassroomName] = useState(() => {
+        try { return localStorage.getItem("classroomName") || "高三(7)班"; } catch(e) { return "高三(7)班"; }
+      });
+      const [subjectName, setSubjectName] = useState(() => {
+        try { return localStorage.getItem("subjectName") || "数学一轮复习"; } catch(e) { return "数学一轮复习"; }
+      });
+      const [examName, setExamName] = useState(() => {
+        try { return localStorage.getItem("examName") || "高考"; } catch(e) { return "高考"; }
+      });
+      const [examDate, setExamDate] = useState(() => {
+        try { return localStorage.getItem("examDate") || "2026-06-07"; } catch(e) { return "2026-06-07"; }
+      });
+      const [motto, setMotto] = useState(() => {
+        try { return localStorage.getItem("motto") || "提高一分，干掉千人！乾坤未定，你我皆是黑马！"; } catch(e) { return "提高一分，干掉千人！乾坤未定，你我皆是黑马！"; }
+      });
+
+      const [gameState, setGameState] = useState("IDLE");
+      const [focusSeconds, setFocusSeconds] = useState(1500);
+      const [dailyLog, setDailyLog] = useState("班级风纪板更新：环境已打扫干净，请大家迅速坐好，潜心专注。");
+      const [isConfiguring, setIsConfiguring] = useState(false);
+
+      const [tempClassroom, setTempClassroom] = useState("");
+      const [tempSubject, setTempSubject] = useState("");
+      const [tempExamName, setTempExamName] = useState("");
+      const [tempExamDate, setTempExamDate] = useState("");
+      const [tempMotto, setTempMotto] = useState("");
+
+      // 冷却状态与怀疑状态的即时存储
+      const cooldownRef = useRef(0);
+      const suspicionRef = useRef(0);
+      const [cooldown, setCooldown] = useState(0);
+      const [suspicionSeconds, setSuspicionSeconds] = useState(0);
+
+      // 白名单防崩溃机制
+      const [whiteList, setWhiteList] = useState(() => {
+        try {
+          const saved = localStorage.getItem("whitelist_urls");
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) { console.warn("解析白名单失败，使用预设。"); }
+        return [
+          { name: "Bing 搜索 (查学习资料)", url: "https://cn.bing.com/" },
+          { name: "有道词典 (查英语单词)", url: "https://dict.youdao.com/" },
+          { name: "百度百科 (查综合知识)", url: "https://baike.baidu.com/" }
+        ];
+      });
+
+      const [newSiteName, setNewSiteName] = useState("");
+      const [newSiteUrl, setNewSiteUrl] = useState("");
+
+      // 学习档案防崩溃机制
+      const [archive, setArchive] = useState(() => {
+        try {
+          const saved = localStorage.getItem("study_archive");
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed && typeof parsed === "object") return parsed;
+          }
+        } catch(e) { console.warn("解析档案失败，使用默认。"); }
+        return { todayMin: 0, weekHour: 0, raidsPassed: 0 };
+      });
+
+      const [leaveSeconds, setLeaveSeconds] = useState(0);
+      const [raidTimer, setRaidTimer] = useState(4.00);
+      const [footstepStep, setFootstepStep] = useState(0);
+      const [warningType, setWarningType] = useState("normal"); // normal | sudden | passby
+
+      const audioCtx = useRef(null);
+      const stateRef = useRef(gameState);
+      const warningIntervalRef = useRef(null);
+      const raidIntervalRef = useRef(null);
+      
+      useEffect(() => { stateRef.current = gameState; }, [gameState]);
+
+      // 将最新状态持久化到浏览器中
+      useEffect(() => {
+        try {
+          localStorage.setItem("theme", theme);
+          localStorage.setItem("classroomName", classroomName);
+          localStorage.setItem("subjectName", subjectName);
+          localStorage.setItem("examName", examName);
+          localStorage.setItem("examDate", examDate);
+          localStorage.setItem("motto", motto);
+          localStorage.setItem("reconPoints", reconPoints);
+          localStorage.setItem("whitelist_urls", JSON.stringify(whiteList));
+          localStorage.setItem("study_archive", JSON.stringify(archive));
+        } catch (e) {
+          console.warn("保存设置失败:", e);
+        }
+      }, [theme, classroomName, subjectName, examName, examDate, motto, reconPoints, whiteList, archive]);
+
+      const initAudioOnUserGesture = () => {
+        try {
+          if (!audioCtx.current) {
+            audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          if (audioCtx.current.state === "suspended") {
+            audioCtx.current.resume();
+          }
+        } catch (e) {
+          console.warn("音频激活失败:", e);
+        }
+      };
+
+      const playTone = (freq, dur, type="sine") => {
+        initAudioOnUserGesture();
+        try {
+          if (!audioCtx.current) return;
+          const osc = audioCtx.current.createOscillator();
+          const g = audioCtx.current.createGain();
+          osc.type = type; osc.frequency.value = freq;
+          g.gain.setValueAtTime(0.04, audioCtx.current.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.current.currentTime + dur);
+          osc.connect(g); g.connect(audioCtx.current.destination);
+          osc.start(); osc.stop(audioCtx.current.currentTime + dur);
+        } catch(e) {}
+      };
+
+      const playFootstep = (volume = 0.05) => {
+        initAudioOnUserGesture();
+        try {
+          if (!audioCtx.current) return;
+          const osc = audioCtx.current.createOscillator();
+          const g = audioCtx.current.createGain();
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(65, audioCtx.current.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(35, audioCtx.current.currentTime + 0.25);
+          g.gain.setValueAtTime(volume, audioCtx.current.currentTime);
+          g.gain.linearRampToValueAtTime(0, audioCtx.current.currentTime + 0.26);
+          osc.connect(g); g.connect(audioCtx.current.destination);
+          osc.start(); osc.stop(audioCtx.current.currentTime + 0.28);
+        } catch(e) {}
+      };
+
+      const checkFullscreenSupport = () => {
+        const docEl = document.documentElement;
+        return !!(docEl.requestFullscreen || docEl.webkitRequestFullScreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen);
+      };
+
+      const enterFullscreen = () => {
+        const el = document.documentElement;
+        try {
+          if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+          else if (el.webkitRequestFullScreen) el.webkitRequestFullScreen();
+          else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
+          else if (el.msRequestFullscreen) el.msRequestFullscreen();
+        } catch (e) {
+          console.warn("请求全屏受阻:", e);
+        }
+      };
+
+      const exitFullscreen = () => {
+        try {
+          if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement) {
+            if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+          }
+        } catch (e) {
+          console.warn("退出全屏受阻:", e);
+        }
+      };
+
+      // 智能防作弊雷达扫描
+      useEffect(() => {
+        const radarScan = () => {
+          if (stateRef.current === "FOCUSING" || stateRef.current === "RAID_ACTIVE") {
+            const hasFullscreenSupport = checkFullscreenSupport();
+            const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+            const isHidden = document.hidden;
+
+            if ((hasFullscreenSupport && !isFull) || isHidden) {
+              triggerCaught();
+            }
+          }
+        };
+        document.addEventListener("fullscreenchange", radarScan);
+        document.addEventListener("webkitfullscreenchange", radarScan);
+        document.addEventListener("visibilitychange", radarScan);
+        return () => {
+          document.removeEventListener("fullscreenchange", radarScan);
+          document.removeEventListener("webkitfullscreenchange", radarScan);
+          document.removeEventListener("visibilitychange", radarScan);
+        };
+      }, [subjectName]);
+
+      const getDaysToExam = () => {
+        if (!examDate) return 0;
+        const now = new Date();
+        const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const target = new Date(examDate);
+        const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+        const diff = targetMidnight.getTime() - todayMidnight.getTime();
+        const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+        return days >= 0 ? days : 0;
+      };
+
+      // 专注主计时环路
+      useEffect(() => {
+        let timer;
+        if (gameState === "FOCUSING") {
+          timer = setInterval(() => {
+            // 每秒递减冷却时间和怀疑指数
+            if (cooldownRef.current > 0) {
+              cooldownRef.current -= 1;
+              setCooldown(cooldownRef.current);
+            }
+            if (suspicionRef.current > 0) {
+              suspicionRef.current -= 1;
+              setSuspicionSeconds(suspicionRef.current);
+            }
+
+            setFocusSeconds(prev => {
+              if (prev <= 1) {
+                setGameState("IDLE");
+                exitFullscreen();
+                setArchive(a => ({...a, todayMin: a.todayMin + 25, weekHour: a.weekHour + 0.4}));
+                setDailyLog(`🎉 恭喜完成一节针对【${subjectName}】的25分钟高效学习！`);
+                return 1500;
+              }
+
+              // 周期内以拟人化巡查机制进行评定
+              const elapsed = 1500 - prev;
+              
+              // 每 15 秒判定一次是否触发巡视
+              if (prev % 15 === 0) {
+                // 1. 拟真巡查节奏：前段（1-5分钟）低频，中段正常，后段高频
+                let baseProb = 0.20;
+                if (elapsed < 300) {
+                  baseProb = 0.08; // 开场前五分钟给自习者沉浸期
+                } else if (elapsed > 1200) {
+                  baseProb = 0.45; // 临近自修结束盯防最严
+                }
+
+                // 2. 怀疑度加成
+                let triggerProb = baseProb;
+                if (suspicionRef.current > 0) {
+                  triggerProb = Math.min(0.85, baseProb * 1.8);
+                }
+
+                // 3. 只有当冷却期过去后才能触发新的视察
+                if (cooldownRef.current <= 0) {
+                  if (Math.random() < triggerProb) {
+                    startRaidWarningSequence();
+                  }
+                }
+              }
+
+              return prev - 1;
+            });
+          }, 1000);
+        }
+        return () => clearInterval(timer);
+      }, [gameState, subjectName]);
+
+      // 脚步声与迫近进度条同步递进（戏剧感增强）
+      const startRaidWarningSequence = () => {
+        setGameState("WARNING");
+        
+        // 随机判定巡查戏剧感事件
+        const roll = Math.random();
+        let type = "normal";
+        let totalSteps = 4;
+        let stepSpeed = 1000;
+        
+        if (roll < 0.20) {
+          type = "sudden"; // 突然爆发突袭
+          totalSteps = 3;
+          stepSpeed = 500;
+        } else if (roll < 0.45) {
+          type = "passby"; // 只是走廊路过，不推门
+          totalSteps = 5;
+          stepSpeed = 1200;
+        }
+
+        setWarningType(type);
+        setFootstepStep(1);
+        playFootstep(0.05);
+
+        let currentStep = 1;
+        warningIntervalRef.current = setInterval(() => {
+          currentStep += 1;
+          setFootstepStep(currentStep);
+          
+          const volumes = [0, 0.05, 0.12, 0.22, 0.35, 0.45];
+          playFootstep(volumes[currentStep] || 0.3);
+
+          if (currentStep >= totalSteps) {
+            clearInterval(warningIntervalRef.current);
+            
+            if (type === "passby") {
+              // 虚惊一场：模拟脚步声渐远
+              let fadeStep = totalSteps;
+              const fadeInterval = setInterval(() => {
+                fadeStep -= 1;
+                setFootstepStep(fadeStep);
+                playFootstep(0.05);
+                if (fadeStep <= 0) {
+                  clearInterval(fadeInterval);
+                  setGameState("FOCUSING");
+                  const randLog = passbyLogs[Math.floor(Math.random() * passbyLogs.length)];
+                  setDailyLog(randLog);
+                  
+                  // 虚惊路过也刷新冷却
+                  cooldownRef.current = 30;
+                  setCooldown(30);
+                }
+              }, 800);
+            } else {
+              setTimeout(() => {
+                triggerRaidActive(type);
+              }, stepSpeed);
+            }
+          }
+        }, stepSpeed);
+      };
+
+      // 老师推门视察
+      const triggerRaidActive = (type) => {
+        setGameState("RAID_ACTIVE");
+        setRaidTimer(4.00);
+        playTone(140, 0.4, "square");
+
+        if (type === "sudden") {
+          setDailyLog("🚪 后门被急促地推开！班主任雷厉风行的眼神当即扫过你周边的区域！");
+        } else {
+          setDailyLog("🚪 门轴发出极细微的摩擦声，班主任缓步移至后门窗前开始仔细扫视教室...");
+        }
+
+        const startTime = Date.now();
+        raidIntervalRef.current = setInterval(() => {
+          const rem = Math.max(4.00 - (Date.now() - startTime)/1000, 0);
+          setRaidTimer(parseFloat(rem.toFixed(2)));
+
+          const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+          const hasFullscreenSupport = checkFullscreenSupport();
+          
+          if ((hasFullscreenSupport && !isFull) || document.hidden) {
+            clearInterval(raidIntervalRef.current);
+            triggerCaught();
+            return;
+          }
+
+          if (rem <= 0) {
+            clearInterval(raidIntervalRef.current);
+            setGameState("FOCUSING");
+            setReconPoints(p => p + 20);
+            setArchive(a => ({...a, raidsPassed: a.raidsPassed + 1}));
+            
+            const randSuccess = successLogs[Math.floor(Math.random() * successLogs.length)];
+            setDailyLog(randSuccess);
+            playTone(440, 0.1);
+
+            // 成功迎检后进入30秒保护冷却，重置怀疑指数
+            cooldownRef.current = 30;
+            setCooldown(30);
+          }
+        }, 50);
+      };
+
+      // 特许豁免请假系统
+      useEffect(() => {
+        let timer;
+        if (gameState === "ON_LEAVE" && leaveSeconds > 0) {
+          timer = setInterval(() => {
+            setLeaveSeconds(prev => {
+              if (prev <= 10 && prev > 1) playTone(600, 0.08, "triangle");
+              if (prev <= 1) {
+                const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                const hasFullscreenSupport = checkFullscreenSupport();
+                
+                if ((hasFullscreenSupport && !isFull) || document.hidden) {
+                  triggerCaught();
+                } else {
+                  setGameState("FOCUSING");
+                  
+                  // 请假归来：触发高度怀疑状态
+                  suspicionRef.current = 150;
+                  setSuspicionSeconds(150);
+                  setDailyLog("📋 假条已逾期，已重新强制接管全屏专注。由于你刚才暂时离场，班主任已对你的自律性产生怀疑，巡防力度大增！");
+                }
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+        }
+        return () => clearInterval(timer);
+      }, [gameState, leaveSeconds]);
+
+      const triggerCaught = () => {
+        clearInterval(warningIntervalRef.current);
+        clearInterval(raidIntervalRef.current);
+        setGameState("CAUGHT");
+        
+        const randCaught = caughtLogs[Math.floor(Math.random() * caughtLogs.length)];
+        setDailyLog(`【风纪通报】${randCaught} (自习【${subjectName}】时桌面检测到切屏或偏离焦点动作，已被记名扣分！)`);
+        playTone(65, 1.3, "sawtooth");
+
+        // 被抓后面壁思过也会留有残余怀疑
+        suspicionRef.current = 60;
+        setSuspicionSeconds(60);
+      };
+
+      const startSession = () => {
+        initAudioOnUserGesture();
+        enterFullscreen();
+        setGameState("FOCUSING");
+        
+        if (gameState === "ON_LEAVE") {
+          // 手动提前归位：依然累积怀疑，但稍微少一点
+          suspicionRef.current = 120;
+          setSuspicionSeconds(120);
+          setDailyLog(`📋 销假成功，已重回针对【${subjectName}】的自主专注。因你刚才查阅了资料，班主任近期的回访扫视概率会略微提升。`);
+        } else {
+          setDailyLog(`【${subjectName}】自主自习已开启。全屏监督系统已就位。`);
+        }
+      };
+
+      const handleOpenWhiteList = (url) => {
+        if (!url) return;
+        initAudioOnUserGesture();
+        setLeaveSeconds(180); 
+        setGameState("ON_LEAVE");
+        exitFullscreen();
+        setDailyLog("已签发 3 分钟『资料查阅假条』。请务必在倒计时结束前重返课堂，严禁超时！");
+        window.open(url, "_blank");
+      };
+
+      const addCustomSite = (e) => {
+        e.preventDefault();
+        if (!newSiteName || !newSiteUrl) return;
+        let formattedUrl = newSiteUrl;
+        if (!/^https?:\/\//i.test(formattedUrl)) formattedUrl = 'https://' + formattedUrl;
+        setWhiteList([...whiteList, { name: newSiteName, url: formattedUrl }]);
+        setNewSiteName("");
+        setNewSiteUrl("");
+      };
+
+      const removeWhiteListSite = (index) => {
+        setWhiteList(whiteList.filter((_, i) => i !== index));
+      };
+
+      const handleOpenConfigModal = () => {
+        setTempClassroom(classroomName);
+        setTempSubject(subjectName);
+        setTempExamName(examName);
+        setTempExamDate(examDate);
+        setTempMotto(motto);
+        setIsConfiguring(true);
+      };
+
+      const handleSaveConfig = () => {
+        setClassroomName(tempClassroom || "高三(7)班");
+        setSubjectName(tempSubject || "数学一轮复习");
+        setExamName(tempExamName || "高考");
+        setExamDate(tempExamDate || "2026-06-07");
+        setMotto(tempMotto || "提高一分，干掉千人！乾坤未定，你我皆是黑马！");
+        setIsConfiguring(false);
+        setDailyLog("个性化自习看板及目标倒计时已成功应用。");
+      };
+
+      // 解除全屏剧烈抖动的平稳重置方法
+      const handleResolveCaught = () => {
+        initAudioOnUserGesture();
+        setGameState("IDLE");
+        setFocusSeconds(1500);
+        exitFullscreen();
+        setDailyLog("端正行为保证书已提交。让我们重新整理思绪，重新开始自习。");
+      };
+
+      const isNight = theme === "night";
+      const mainBg = isNight ? "blackboard-bg" : "paper-texture";
+      const cardClass = isNight ? "glass-card" : "light-glass-card";
+      const borderClass = isNight ? "border-white/20 text-emerald-100" : "border-stone-300 text-stone-800";
+
+      return (
+        <div className={`min-h-screen w-full ${mainBg} flex flex-col p-4 md:p-6 space-y-4 md:space-y-6 transition-all ${
+          gameState === 'CAUGHT' ? 'caught-explosion' : ''
+        }`}>
+          
+          {/* Header 区域 */}
+          <header className={`flex flex-col sm:flex-row justify-between items-center p-4 rounded-xl ${cardClass} shadow-md border gap-4`}>
+            <div className="flex items-center space-x-3 text-center sm:text-left">
+              <Icons.Shield className="w-7 h-7 text-emerald-500 shrink-0 animate-pulse" />
+              <div>
+                <h1 className="text-xl md:text-2xl font-chalk tracking-wider">{classroomName} · <span className="text-emerald-400">专注自习室</span></h1>
+                <p className="text-[10px] tracking-widest uppercase opacity-50">高考冲刺 · 自律提分终端</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-6 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-current/10">
+              {/* 倒计时看板 */}
+              <div className="text-center sm:text-right">
+                <span className="px-3 py-1 rounded bg-red-600 text-white text-[10px] font-bold animate-pulse shadow-sm">
+                  距{examName}仅剩 <span className="font-mono-digital text-sm">{getDaysToExam()}</span> 天
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button 
+                  onClick={handleOpenConfigModal}
+                  className="px-2.5 py-1.5 font-chalk rounded-lg border border-current text-xs hover:scale-105 transition"
+                >
+                  ⚙️ 房间配置
+                </button>
+                <button 
+                  onClick={() => setTheme(isNight ? "day" : "night")}
+                  className="px-2.5 py-1.5 font-chalk rounded-lg border border-current text-xs hover:scale-105 transition"
+                >
+                  {isNight ? "✏️ 阳光课桌" : "🟢 墨绿黑板"}
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* 三栏响应式大厅 */}
+          <main className="flex-1 flex flex-col lg:flex-row gap-4 md:gap-6 overflow-hidden">
+            
+            {/* 左侧：表格出勤记录 */}
+            <aside className={`w-full lg:w-72 p-4 rounded-xl flex flex-col justify-between border ${cardClass} order-2 lg:order-1 shadow`}>
+              <div>
+                <h3 className="text-sm font-chalk border-b border-current/20 pb-2 mb-3 flex items-center">
+                  <Icons.User className="w-4 h-4 mr-2 text-emerald-500" /> 高考复勤档案表
+                </h3>
+                
+                <div className="overflow-x-auto text-xs mt-2 font-sans">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className={isNight ? 'bg-white/5' : 'bg-amber-800/5'}>
+                        <th className={`p-2 border ${borderClass} font-bold`}>复习指标</th>
+                        <th className={`p-2 border ${borderClass} font-bold`}>档案数据</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className={`p-2 border ${borderClass}`}>当前学科</td>
+                        <td className={`p-2 border ${borderClass} font-medium truncate max-w-[120px]`} title={subjectName}>{subjectName}</td>
+                      </tr>
+                      <tr>
+                        <td className={`p-2 border ${borderClass}`}>今日潜心专注</td>
+                        <td className={`p-2 border ${borderClass} font-mono-digital font-bold text-emerald-500 text-sm`}>{archive.todayMin} min</td>
+                      </tr>
+                      <tr>
+                        <td className={`p-2 border ${borderClass}`}>本周出勤时数</td>
+                        <td className={`p-2 border ${borderClass} font-mono-digital font-bold text-emerald-500 text-sm`}>{archive.weekHour.toFixed(1)} hr</td>
+                      </tr>
+                      <tr>
+                        <td className={`p-2 border ${borderClass}`}>迎检通过频次</td>
+                        <td className={`p-2 border ${borderClass} font-mono-digital font-bold text-amber-500 text-sm`}>{archive.raidsPassed} 次</td>
+                      </tr>
+                      <tr>
+                        <td className={`p-2 border ${borderClass}`}>自律累计积分</td>
+                        <td className={`p-2 border ${borderClass} font-mono-digital font-bold text-amber-500 text-sm`}>{reconPoints}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-current/10 mt-4 lg:mt-0 text-[11px] opacity-50 leading-relaxed">
+                * 自律约束：潜心备考，杜绝无意义切屏。本系统严格绑定全屏/视窗状态，退出将被扣除自律积分。
+              </div>
+            </aside>
+
+            {/* 中间：视察大门核心区 */}
+            <section className="flex-1 flex flex-col items-center justify-between py-4 min-h-[440px] order-1 lg:order-2">
+              <div className="text-center w-full">
+                <div className="flex justify-center items-center gap-2 mb-1.5 min-h-[24px]">
+                  <p className="text-sm md:text-base font-chalk tracking-wide text-emerald-500">
+                    {gameState === 'ON_LEAVE' ? '⏳ 临时资料查阅时间' : `📕 当前学科：【${subjectName}】全神贯注自习中`}
+                  </p>
+                  {suspicionSeconds > 0 && gameState === 'FOCUSING' && (
+                    <span className="px-2 py-0.5 rounded bg-red-500/20 border border-red-500/40 text-red-400 text-[10px] font-bold animate-pulse">
+                      👁️ 班主任高度怀疑中
+                    </span>
+                  )}
+                </div>
+                
+                <h2 className="text-6xl md:text-7xl font-mono-digital font-bold tracking-wider">
+                  {gameState === 'ON_LEAVE' ? formatTime(leaveSeconds) : formatTime(focusSeconds)}
+                </h2>
+
+                {cooldown > 0 && gameState === 'FOCUSING' && (
+                  <p className="text-[10px] text-emerald-500/60 dark:text-emerald-300/40 mt-1.5 transition">
+                    (班主任刚走，进入短暂自律安全期：{cooldown}秒)
+                  </p>
+                )}
+              </div>
+
+              {/* 🚪 教室后门组件 (全新无缝融合包边设计，彻底杜绝白边) 🚪 */}
+              <div className="relative w-48 h-80 perspective-[1200px] my-3 rounded-2xl bg-[#090503] shadow-inner p-1">
+                {/* 深红木质内侧门框 */}
+                <div className="absolute inset-0 border-[6px] border-[#2c1309] rounded-xl bg-[#0a0503] overflow-hidden">
+                   
+                   {/* 👩‍🏫 拟人化二次元班主任女老师现身层 👩‍🏫 */}
+                   {(gameState === "RAID_ACTIVE" || gameState === "CAUGHT") && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-between p-2 pt-4 bg-[#142C1E]/95 animate-fade-in-scale">
+                      <div className="w-full h-44">
+                        <TeacherPortrait />
+                      </div>
+                      <div className="mb-2 bg-white text-stone-900 text-[10px] font-bold px-2 py-0.5 rounded border border-red-500 shadow">
+                        {gameState === "CAUGHT" ? "考纪黄牌通报！" : "视察中..."}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 拟物木质门页 */}
+                  <div 
+                    className="absolute inset-0 wood-door-bg border-r-[6px] border-black/50 transition-transform duration-500 origin-left z-20 flex flex-col justify-between p-4"
+                    style={{ transform: (gameState==='RAID_ACTIVE'||gameState==='CAUGHT') ? 'rotateY(-110deg)' : 'rotateY(0deg)' }}
+                  >
+                    {/* 窥视玻璃小窗 */}
+                    <div className="w-full h-24 border border-white/20 bg-white/5 rounded shadow-inner relative overflow-hidden">
+                      <div className="absolute inset-0 glass-mesh opacity-20"></div>
+                      <div className="w-full h-0.5 bg-white/10 mt-12"></div>
+                    </div>
+                    {/* 圆形把手 */}
+                    <div className="w-4 h-4 bg-gradient-to-br from-yellow-300 to-amber-600 rounded-full ml-auto mr-1 shadow-md border border-black/40 my-auto"></div>
+                    <div className="w-full h-1"></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 按钮群组 */}
+              <div className="w-full max-w-xs px-2">
+                {gameState === "IDLE" && (
+                  <button onClick={startSession} className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-600 font-chalk text-white rounded-lg text-sm tracking-widest shadow-lg transform hover:scale-102 transition min-h-[44px]">
+                    开始进入全屏自习
+                  </button>
+                )}
+                {gameState === "FOCUSING" && (
+                  <div className="grid grid-cols-2 gap-2 w-full font-chalk">
+                    <button 
+                      onClick={() => handleOpenWhiteList(whiteList[0]?.url)} 
+                      className={`py-3 rounded-lg border border-current text-xs min-h-[44px] hover:scale-102 transition ${isNight?'bg-white/5':'bg-stone-200'}`}
+                    >
+                      查阅资料
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (confirm("提前退场将无法积累本次复习时长，确定退出专注吗？")) {
+                          setGameState("IDLE");
+                          exitFullscreen();
+                        }
+                      }} 
+                      className="py-3 rounded-lg bg-red-900/10 border border-red-500/30 text-red-500 text-xs min-h-[44px] hover:scale-102 transition"
+                    >
+                      放弃自习
+                    </button>
+                  </div>
+                )}
+                {gameState === "ON_LEAVE" && (
+                  <button onClick={startSession} className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 font-chalk text-white rounded-lg text-xs tracking-widest animate-pulse min-h-[44px]">
+                    查阅完毕 · 重新归位 (开启全屏)
+                  </button>
+                )}
+                {gameState === "CAUGHT" && (
+                  <button onClick={handleResolveCaught} className="w-full py-3.5 bg-red-700 hover:bg-red-600 font-chalk text-white rounded-lg text-xs tracking-widest animate-bounce shadow-xl min-h-[44px]">
+                    端正行为 (解除屏幕震动)
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {/* 右侧：风纪通报板 + 自定义白名单 */}
+            <aside className={`w-full lg:w-72 p-4 rounded-xl flex flex-col justify-between border ${cardClass} order-3 shadow`}>
+              <div className="space-y-4">
+                
+                {/* 动态通报 */}
+                <div>
+                  <h3 className="text-sm font-chalk border-b border-current/20 pb-1.5 mb-2">
+                    📢 班级出勤与动态通报
+                  </h3>
+                  <div className={`p-2.5 rounded border border-current/10 text-xs leading-relaxed font-sans font-normal tracking-wide shadow-inner max-h-24 overflow-y-auto ${
+                    isNight ? 'bg-black/20 text-stone-200' : 'bg-stone-100 text-stone-800'
+                  }`}>
+                    {dailyLog}
+                  </div>
+                </div>
+
+                {/* 自定义白名单管理 */}
+                <div>
+                  <h3 className="text-sm font-chalk border-b border-current/20 pb-1.5 mb-2 flex items-center">
+                    <Icons.Book className="w-4 h-4 mr-1.5 text-amber-500" /> 学习网站白名单
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                    {whiteList.map((site, idx) => (
+                      <div key={idx} className="flex items-center space-x-1 w-full group">
+                        <button 
+                          disabled={gameState !== "FOCUSING"}
+                          onClick={() => handleOpenWhiteList(site.url)}
+                          className={`flex-1 p-1.5 rounded text-left text-xs flex items-center justify-between border transition truncate min-h-[36px] ${
+                            gameState === "FOCUSING" 
+                              ? (isNight ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-white border-stone-300 hover:bg-stone-50')
+                              : 'opacity-40 cursor-not-allowed'
+                          }`}
+                        >
+                          <span className="truncate font-medium">{site.name}</span>
+                          <Icons.ExternalLink className="w-3 h-3 opacity-40 shrink-0 ml-1" />
+                        </button>
+                        <button 
+                          onClick={() => removeWhiteListSite(idx)}
+                          className="p-1.5 text-red-400 hover:text-red-500 opacity-30 group-hover:opacity-100 transition shrink-0"
+                          title="移除网址"
+                        >
+                          <Icons.Trash className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 添加网址表单 */}
+                  <form onSubmit={addCustomSite} className="mt-2 border-t border-current/10 pt-2 space-y-1">
+                    <p className="text-[10px] opacity-50 font-bold">➕ 自定义增加资料外链：</p>
+                    <input 
+                      type="text" placeholder="网页名称" 
+                      value={newSiteName} onChange={e=>setNewSiteName(e.target.value)}
+                      className="w-full p-1 text-[11px] rounded border border-current/20 bg-transparent text-current focus:outline-none"
+                    />
+                    <div className="flex space-x-1">
+                      <input 
+                        type="text" placeholder="输入网址(如 youdao.com)" 
+                        value={newSiteUrl} onChange={e=>setNewSiteUrl(e.target.value)}
+                        className="flex-1 p-1 text-[11px] rounded border border-current/20 bg-transparent text-current focus:outline-none"
+                      />
+                      <button type="submit" className="px-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-[11px] flex items-center justify-center">
+                        <Icons.Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* 黑板报座右铭 */}
+                <div>
+                  <div className="flex justify-between items-center border-b border-current/20 pb-1.5 mb-2">
+                    <h3 className="text-sm font-chalk">✏️ 黑板报标语</h3>
+                  </div>
+                  <p className="text-xs italic opacity-90 pl-2 border-l-2 border-amber-500 leading-relaxed font-chalk tracking-wider text-justify">
+                    {motto}
+                  </p>
+                </div>
+              </div>
+            </aside>
+          </main>
+
+          {/* 自定义配置弹窗 */}
+          {isConfiguring && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 font-sans text-stone-900 animate-fade-in-scale">
+              <div className="bg-[#FCF8F2] w-full max-w-sm p-5 rounded-xl border border-stone-300 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <h2 className="text-sm font-bold text-stone-800 border-b pb-2">⚙️ 自习室冲刺个性化配置</h2>
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="block text-stone-600 mb-1 font-bold">🏫 班级/自习室名称：</label>
+                    <input type="text" value={tempClassroom} onChange={e=>setTempClassroom(e.target.value)} className="w-full p-2 border rounded bg-white text-stone-900 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-stone-600 mb-1 font-bold">📕 当前学习科目：</label>
+                    <input type="text" value={tempSubject} onChange={e=>setTempSubject(e.target.value)} className="w-full p-2 border rounded bg-white text-stone-900 focus:outline-none" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-stone-600 mb-1 font-bold">🎯 冲刺目标考试：</label>
+                      <input type="text" value={tempExamName} onChange={e=>setTempExamName(e.target.value)} className="w-full p-2 border rounded bg-white text-stone-900 focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-stone-600 mb-1 font-bold">📅 考试目标日期：</label>
+                      <input type="date" value={tempExamDate} onChange={e=>setTempExamDate(e.target.value)} className="w-full p-2 border rounded bg-white text-stone-900 focus:outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-stone-600 mb-1 font-bold">📝 高考冲刺口号：</label>
+                    <textarea value={tempMotto} onChange={e=>setTempMotto(e.target.value)} rows="2" className="w-full p-2 border rounded bg-white text-stone-900 resize-none focus:outline-none" />
+                  </div>
+                </div>
+                <div className="flex space-x-2 pt-2">
+                  <button onClick={()=>setIsConfiguring(false)} className="flex-1 py-2 bg-stone-300 hover:bg-stone-400 text-stone-800 font-bold rounded text-xs">
+                    取消
+                  </button>
+                  <button onClick={handleSaveConfig} className="flex-1 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded text-xs">
+                    保存修改
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 警告状态：脚步渐近进度条遮罩 */}
+          {gameState === 'WARNING' && (
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-amber-950/95 border-2 border-amber-500 p-4 rounded-xl text-center backdrop-blur-sm shadow-2xl max-w-[280px] w-full pointer-events-none animate-fade-in-scale">
+              <p className="text-[11px] font-chalk text-amber-400 mb-1.5 leading-relaxed">
+                {warningType === 'sudden' ? '🚨 糟糕！走廊传来急促的皮鞋敲击声，直奔后门！' : 
+                 warningType === 'passby' ? '👣 走廊隐约传来阵阵迟缓的脚步声...' : 
+                 '👟 听！走廊外传来皮鞋与地面的摩擦声，正缓缓逼近...'}
+              </p>
+              <div className="mt-2 mb-2 flex justify-center gap-1.5">
+                {[1, 2, 3, 4, 5].map(step => (
+                  <span 
+                    key={step} 
+                    className={`h-3 rounded transition-all duration-300 ${
+                      footstepStep >= step ? 'w-10 bg-red-600 animate-pulse' : 'w-4 bg-stone-800'
+                    }`}
+                  />
+                ))}
+              </div>
+              <p className="text-[10px] text-stone-400 mt-1 font-sans">
+                {warningType === 'sudden' ? '突发突袭！迅速摆正姿势！' : 
+                 warningType === 'passby' ? '保持淡定，可能是隔壁班路过...' : 
+                 '注意：班主任随时可能推门！'}
+              </p>
+            </div>
+          )}
+
+          {/* 突击抽查状态遮罩 */}
+          {gameState === 'RAID_ACTIVE' && (
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-emerald-950/95 border-2 border-emerald-400 p-4 rounded-xl text-center backdrop-blur-sm shadow-2xl max-w-[260px] w-full pointer-events-none">
+              <p className="text-[11px] font-chalk text-emerald-400 mb-1">⚠️ 班主任正在后门窗外进行凝视巡视</p>
+              <p className="font-mono-digital text-3xl text-emerald-300 font-bold">{raidTimer.toFixed(2)}s</p>
+              <p className="text-[10px] text-stone-400 mt-1 font-sans">严禁切屏！目光收回，保持专注！</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function formatTime(s) {
+      const m = Math.floor(s / 60);
+      const rs = s % 60;
+      return `${m.toString().padStart(2, '0')}:${rs.toString().padStart(2, '0')}`;
+    }
+
+    const container = document.getElementById("root");
+    const root = ReactDOM.createRoot(container);
+    root.render(<App />);
+  </script>
+</body>
+</html>
